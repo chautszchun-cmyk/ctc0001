@@ -36,20 +36,20 @@
             to { transform: translateY(-10px); }
         }
         
-        /* 網格動畫 (調慢) */
+        /* 網格動畫 (保持較慢速度) */
         .grid-line {
             stroke-dasharray: 1000;
             stroke-dashoffset: 1000;
-            animation: drawLine 2.5s forwards; /* 從 1s 改為 2.5s */
+            animation: drawLine 2.5s forwards;
         }
         @keyframes drawLine {
             to { stroke-dashoffset: 0; }
         }
 
-        /* 填充動畫 (調慢) */
+        /* 填充動畫 (保持較慢速度) */
         .fill-anim {
             opacity: 0;
-            animation: fadeInFill 1.5s forwards; /* 從 0.5s 改為 1.5s */
+            animation: fadeInFill 1.5s forwards;
         }
         @keyframes fadeInFill {
             to { opacity: 0.7; } /* Fill opacity */
@@ -71,16 +71,22 @@
     <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-4xl flex flex-col md:flex-row gap-8 border-4 border-white">
         
         <!-- 左側：視覺演示區 -->
-        <div class="flex-1 flex flex-col items-center justify-center bg-gray-50 rounded-2xl p-4 border-2 border-dashed border-gray-300 relative">
-            <h3 class="text-gray-500 font-bold mb-2 absolute top-4 left-4">視覺化模型 (Area Model)</h3>
+        <div class="flex-1 flex flex-col items-center justify-start bg-gray-50 rounded-2xl p-4 border-2 border-dashed border-gray-300 relative min-h-[400px]">
+            <h3 class="text-gray-500 font-bold mb-4 self-start">視覺化模型 (Area Model)</h3>
             
-            <!-- 重播按鈕 -->
-            <button onclick="drawModel(currentProblem)" class="absolute top-4 right-4 bg-white hover:bg-gray-100 text-gray-600 border border-gray-300 rounded-lg px-3 py-1 text-sm font-bold shadow-sm transition flex items-center gap-1">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                重播
-            </button>
+            <!-- 控制按鈕區 (新加入) -->
+            <div class="flex gap-2 mb-4 w-full">
+                <button id="btn-show-a" onclick="drawFractionA()" class="flex-1 bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300 rounded-lg px-2 py-2 text-sm font-bold shadow-sm transition flex items-center justify-center gap-1">
+                    <span>① 顯示分數 A</span>
+                    <div class="w-3 h-3 bg-blue-400 rounded"></div>
+                </button>
+                <button id="btn-show-b" onclick="drawFractionB()" class="flex-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300 rounded-lg px-2 py-2 text-sm font-bold shadow-sm transition flex items-center justify-center gap-1">
+                    <span>② 顯示分數 B</span>
+                    <div class="w-3 h-3 bg-yellow-400 rounded"></div>
+                </button>
+            </div>
             
-            <svg id="visual-svg" viewBox="0 0 400 350" class="w-full h-auto max-h-[300px] mt-8">
+            <svg id="visual-svg" viewBox="0 0 400 350" class="w-full h-auto max-h-[300px]">
                 <!-- 背景白板 -->
                 <rect x="10" y="40" width="380" height="280" rx="10" fill="white" stroke="#E5E7EB" stroke-width="2"/>
                 
@@ -94,10 +100,10 @@
                 <text id="label-fraction2" x="30" y="180" text-anchor="middle" font-size="16" fill="#EF4444" font-weight="bold" transform="rotate(-90 30 180)"></text>
             </svg>
 
-            <div class="mt-4 flex gap-4 text-sm font-bold">
-                <div class="flex items-center"><div class="w-4 h-4 bg-blue-400 opacity-70 mr-2 rounded"></div>分數 A</div>
-                <div class="flex items-center"><div class="w-4 h-4 bg-yellow-400 opacity-70 mr-2 rounded"></div>分數 B</div>
-                <div class="flex items-center"><div class="w-4 h-4 bg-green-500 opacity-90 mr-2 rounded"></div>重疊區域 (答案)</div>
+            <div class="mt-4 flex gap-4 text-sm font-bold flex-wrap justify-center">
+                <div class="flex items-center"><div class="w-4 h-4 bg-blue-400 opacity-70 mr-2 rounded"></div>分數 A (直)</div>
+                <div class="flex items-center"><div class="w-4 h-4 bg-yellow-400 opacity-70 mr-2 rounded"></div>分數 B (橫)</div>
+                <div class="flex items-center"><div class="w-4 h-4 bg-green-500 opacity-90 mr-2 rounded"></div>重疊 (答案)</div>
             </div>
         </div>
 
@@ -164,6 +170,10 @@
         let score = 0;
         let qCount = 0;
         let isAnswered = false;
+        
+        // 繪圖狀態標記
+        let hasDrawnA = false;
+        let hasDrawnB = false;
 
         // DOM 元素
         const elNum1 = document.getElementById('num1');
@@ -181,6 +191,10 @@
         const lblFrac1 = document.getElementById('label-fraction1');
         const lblFrac2 = document.getElementById('label-fraction2');
         const simplifyHint = document.getElementById('simplify-hint');
+        
+        // 按鈕
+        const btnShowA = document.getElementById('btn-show-a');
+        const btnShowB = document.getElementById('btn-show-b');
 
         // 音效
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -212,18 +226,14 @@
             }
         }
 
-        // 數學工具：最大公因數
         function gcd(a, b) {
             return b === 0 ? a : gcd(b, a % b);
         }
 
-        // 生成新題目
         function generateProblem() {
-            // 隨機生成分母 (2-6，避免圖形太複雜)
             const den1 = Math.floor(Math.random() * 4) + 2; 
             const den2 = Math.floor(Math.random() * 4) + 2; 
 
-            // 生成真分數的分子
             const num1 = Math.floor(Math.random() * (den1 - 1)) + 1;
             const num2 = Math.floor(Math.random() * (den2 - 1)) + 1;
 
@@ -233,17 +243,22 @@
             };
         }
 
-        // 繪製 SVG 模型
-        function drawModel(p) {
+        // 初始化模型區域 (只畫外框，不畫內容)
+        function initModel(p) {
             modelContainer.innerHTML = ''; // 清空
+            hasDrawnA = false;
+            hasDrawnB = false;
             
+            // 重置按鈕狀態
+            btnShowA.disabled = false;
+            btnShowA.classList.remove('opacity-50', 'cursor-not-allowed');
+            btnShowB.disabled = false;
+            btnShowB.classList.remove('opacity-50', 'cursor-not-allowed');
+
             const w = 300;
             const h = 200;
-            const colW = w / p.f1.d;
-            const rowH = h / p.f2.d;
 
-            // 1. 繪製背景網格 (總格子)
-            // 先畫外框
+            // 繪製背景網格外框
             const border = document.createElementNS("http://www.w3.org/2000/svg", "rect");
             border.setAttribute("width", w);
             border.setAttribute("height", h);
@@ -252,8 +267,27 @@
             border.setAttribute("stroke-width", "2");
             modelContainer.appendChild(border);
 
-            // 2. 垂直分割 (分數 A - 藍色)
-            // 這裡畫出填滿的部分
+            // 更新標籤
+            lblFrac1.textContent = "";
+            lblFrac2.textContent = "";
+        }
+
+        // 畫分數 A (垂直)
+        function drawFractionA() {
+            if (hasDrawnA) return; // 避免重複畫
+            hasDrawnA = true;
+            btnShowA.disabled = true;
+            btnShowA.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const p = currentProblem;
+            const w = 300;
+            const h = 200;
+            const colW = w / p.f1.d;
+
+            // 更新標籤
+            lblFrac1.textContent = `直行分割: ${p.f1.n}/${p.f1.d}`;
+
+            // 1. 垂直分割 (藍色填滿)
             for (let i = 0; i < p.f1.n; i++) {
                 const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
                 rect.setAttribute("x", i * colW);
@@ -266,7 +300,7 @@
                 modelContainer.appendChild(rect);
             }
 
-            // 垂直網格線 (畫在最上層)
+            // 2. 垂直網格線
             for (let i = 1; i < p.f1.d; i++) {
                 const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
                 line.setAttribute("x1", i * colW);
@@ -277,13 +311,31 @@
                 line.setAttribute("stroke-width", "2");
                 line.setAttribute("stroke-dasharray", "4 2");
                 line.setAttribute("class", "grid-line");
-                // 延遲一點點，等藍色區塊開始填色後再畫線
-                line.style.animationDelay = "0.5s"; // 調慢：0.2s -> 0.5s
+                line.style.animationDelay = "0.5s";
                 modelContainer.appendChild(line);
             }
+        }
 
-            // 3. 水平分割 (分數 B - 黃色半透明)
-            // 這裡畫出填滿的部分
+        // 畫分數 B (水平) + 重疊
+        function drawFractionB() {
+            if (hasDrawnB) return;
+            hasDrawnB = true;
+            btnShowB.disabled = true;
+            btnShowB.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            // 如果 A 還沒畫，建議先畫 A (或者這裡強制調用，但為了自由度我們允許直接畫 B)
+            // 這裡我們直接疊加
+
+            const p = currentProblem;
+            const w = 300;
+            const h = 200;
+            const colW = w / p.f1.d;
+            const rowH = h / p.f2.d;
+
+            // 更新標籤
+            lblFrac2.textContent = `橫列分割: ${p.f2.n}/${p.f2.d}`;
+
+            // 1. 水平分割 (黃色填滿)
             for (let j = 0; j < p.f2.n; j++) {
                 const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
                 rect.setAttribute("x", 0);
@@ -291,14 +343,14 @@
                 rect.setAttribute("width", w);
                 rect.setAttribute("height", rowH);
                 rect.setAttribute("fill", "#FBBF24"); // Yellow-400
-                rect.setAttribute("fill-opacity", "0.5"); // 半透明以顯示重疊
+                rect.setAttribute("fill-opacity", "0.5");
                 rect.setAttribute("class", "fill-anim");
-                // 顯著延遲，等待垂直部分完全演示完畢
-                rect.style.animationDelay = "2s"; // 調慢：0.5s -> 2s
+                // 這裡不需要太長的延遲，因為是按鈕觸發
+                rect.style.animationDelay = "0s"; 
                 modelContainer.appendChild(rect);
             }
 
-            // 水平網格線
+            // 2. 水平網格線
             for (let j = 1; j < p.f2.d; j++) {
                 const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
                 line.setAttribute("x1", 0);
@@ -309,42 +361,35 @@
                 line.setAttribute("stroke-width", "2");
                 line.setAttribute("stroke-dasharray", "4 2");
                 line.setAttribute("class", "grid-line");
-                // 再延遲，確保黃色填色後才畫線
-                line.style.animationDelay = "3s"; // 調慢：0.7s -> 3s
+                line.style.animationDelay = "1s"; // 等黃色填滿再畫線
                 modelContainer.appendChild(line);
             }
 
-            // 4. 強調重疊區域 (綠色)
-            // 這是答案的分子部分
-            // 最後才顯示
+            // 3. 強調重疊區域 (綠色) - 自動在 B 畫完後顯示
+            // 延遲 3 秒，確保學生先看完黃色部分
             setTimeout(() => {
+                // 只有當 A 也有畫的時候，重疊區域才有意義，但為了視覺完整性，
+                // 我們假設重疊是 B 的一部分 (疊在潛在的 A 上)
                 for (let i = 0; i < p.f1.n; i++) {
                     for (let j = 0; j < p.f2.n; j++) {
                         const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                        rect.setAttribute("x", i * colW + 2); // padding
+                        rect.setAttribute("x", i * colW + 2); 
                         rect.setAttribute("y", j * rowH + 2);
                         rect.setAttribute("width", colW - 4);
                         rect.setAttribute("height", rowH - 4);
                         rect.setAttribute("fill", "#22C55E"); // Green-500
                         rect.setAttribute("fill-opacity", "0");
                         
-                        // 轉場也變慢
-                        rect.style.transition = "fill-opacity 1.5s"; // 調慢：0.5s -> 1.5s
+                        rect.style.transition = "fill-opacity 1.5s";
                         modelContainer.appendChild(rect);
                         
-                        // Trigger reflow
                         rect.getBoundingClientRect();
                         rect.setAttribute("fill-opacity", "0.8");
                     }
                 }
-            }, 5000); // 調慢：1000ms -> 5000ms (5秒後才顯示答案區域)
-
-            // 更新標籤
-            lblFrac1.textContent = `直行分割: ${p.f1.n}/${p.f1.d}`;
-            lblFrac2.textContent = `橫列分割: ${p.f2.n}/${p.f2.d}`;
+            }, 3000); 
         }
 
-        // 初始化一題
         function nextQuestion() {
             currentProblem = generateProblem();
             qCount++;
@@ -372,11 +417,10 @@
             btnCheck.classList.remove('hidden');
             btnNext.classList.add('hidden');
 
-            // Draw SVG
-            drawModel(currentProblem);
+            // 只初始化外框，不自動畫內容
+            initModel(currentProblem);
         }
 
-        // 檢查答案
         function checkAnswer() {
             const userNum = parseInt(elAnsNum.value);
             const userDen = parseInt(elAnsDen.value);
@@ -387,11 +431,8 @@
                 return;
             }
 
-            // 正確答案 (未約分)
             const correctNumRaw = currentProblem.f1.n * currentProblem.f2.n;
             const correctDenRaw = currentProblem.f1.d * currentProblem.f2.d;
-
-            // 正確答案 (最簡分數)
             const commonDivisor = gcd(correctNumRaw, correctDenRaw);
             const correctNumSimp = correctNumRaw / commonDivisor;
             const correctDenSimp = correctDenRaw / commonDivisor;
@@ -401,7 +442,6 @@
             let message = "";
 
             if (userNum === correctNumSimp && userDen === correctDenSimp) {
-                // 最簡分數 (完美)
                 isCorrect = true;
                 points = 100;
                 message = `太棒了！答對了且是最簡分數！(+100分)`;
@@ -409,16 +449,14 @@
                     message = `太厲害了！你直接算出了最簡分數！(+100分)`;
                 }
             } else if (userNum === correctNumRaw && userDen === correctDenRaw) {
-                // 未約分 (正確)
                 isCorrect = true;
-                points = 80; // 稍微少一點分
+                points = 80;
                 message = `答對了！(+80分)`;
                 if (correctNumRaw !== correctNumSimp) {
                      message += `<br><span class="text-sm text-yellow-600">💡 提示：這個答案還可以約分喔 (${correctNumSimp}/${correctDenSimp})，約分可以拿滿分！</span>`;
                      simplifyHint.classList.remove('hidden');
                 }
             } else {
-                // 錯誤
                 isCorrect = false;
                 message = `再試試看！<br>提示：分子乘分子 (${currentProblem.f1.n}×${currentProblem.f2.n})，分母乘分母 (${currentProblem.f1.d}×${currentProblem.f2.d})`;
             }
@@ -429,20 +467,22 @@
                 elScore.textContent = score;
                 elFeedback.innerHTML = `<span class="text-green-600 font-bold text-xl bounce inline-block">✅ ${message}</span>`;
                 
-                // 鎖定輸入
                 elAnsNum.disabled = true;
                 elAnsDen.disabled = true;
                 isAnswered = true;
 
-                // 切換按鈕
                 btnCheck.classList.add('hidden');
                 btnNext.classList.remove('hidden');
                 btnNext.focus();
+                
+                // 如果答對時還沒按按鈕，自動補完視覺效果
+                if (!hasDrawnA) drawFractionA();
+                if (!hasDrawnB) setTimeout(drawFractionB, 1000);
+
             } else {
                 playSound('wrong');
                 elFeedback.innerHTML = `<span class="text-red-500 font-bold text-lg shake">❌ ${message}</span>`;
                 
-                // 錯誤動畫
                 const inputs = [elAnsNum, elAnsDen];
                 inputs.forEach(el => {
                     el.classList.add('border-red-500');
@@ -451,7 +491,6 @@
             }
         }
 
-        // 支援 Enter 鍵提交
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 if (!isAnswered) {
@@ -462,7 +501,6 @@
             }
         });
 
-        // Start game
         window.onload = nextQuestion;
 
     </script>
