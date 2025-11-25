@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卡通電路導電體練習</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;700&display=swap'); /* 可愛卡通字體 */
+        body { font-family: 'Fredoka', sans-serif; }
+
+        /* 標題動畫 */
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-bounce-slow {
+            animation: bounce-slow 2s infinite ease-in-out;
+        }
+
+        /* 電流流動動畫 */
+        @keyframes flow {
+            from { stroke-dashoffset: 0; }
+            to { stroke-dashoffset: -200; }
+        }
+        .electric-flow {
+            stroke-dasharray: 10 5;
+            animation: flow 2s linear infinite;
+        }
+        
+        /* 燈泡卡通風格 */
+        .bulb-off-cartoon {
+            fill: #E5E7EB; 
+            filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.2));
+            transition: all 0.3s ease-in-out;
+        }
+        .bulb-on-cartoon {
+            fill: #FFEB3B; 
+            filter: drop-shadow(0 0 10px rgba(255, 235, 59, 0.8)) drop-shadow(0 0 20px rgba(255, 235, 59, 0.6));
+            transition: all 0.3s ease-in-out;
+        }
+
+        /* 開關和元件拖曳樣式 */
+        .switch-button-cartoon, .draggable-item {
+            cursor: pointer;
+            transition: transform 0.1s ease, filter 0.1s ease;
+            filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.2));
+            /* 確保 G 元素可以接收事件 */
+            pointer-events: bounding-box; 
+        }
+        .switch-button-cartoon:hover, .draggable-item:hover {
+            transform: scale(1.05);
+            filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.3));
+        }
+        .dragging {
+            cursor: grabbing;
+            filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.5));
+            opacity: 0.9;
+            transform: scale(1.1);
+        }
+
+        /* 電線卡通風格 */
+        .circuit-wire {
+            stroke: #4B5563; 
+            stroke-width: 10; 
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); 
+        }
+        .current-wire {
+            stroke: #3B82F6; 
+            stroke-width: 10;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.5));
+        }
+        
+        /* 測試區連接點樣式 */
+        .test-point {
+            fill: #6EE7B7; /* 淺綠色 */
+            stroke: #059669;
+            stroke-width: 3;
+            filter: drop-shadow(0 0 5px rgba(110, 231, 183, 0.7));
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-300 to-purple-400 min-h-screen flex items-center justify-center p-4">
+
+    <!-- Firebase 模擬變數 (每個應用程式必須包含) -->
+    <script>
+        const __app_id = 'circuit-game-conductor-app';
+        const __firebase_config = '{}';
+        const __initial_auth_token = undefined;
+    </script>
+    
+    <div class="w-full max-w-5xl bg-white shadow-2xl rounded-3xl p-8 border-4 border-yellow-400 transform rotate-3 scale-95 transition-transform duration-300 hover:rotate-0 hover:scale-100">
+        <h1 class="text-4xl font-bold text-center text-indigo-700 mb-4 animate-bounce-slow">
+            ⚡ 導電體與絕緣體測驗 🧪
+        </h1>
+        <p class="text-center text-gray-700 text-lg mb-8">
+            將測試物品拖曳到電路缺口，然後點擊開關，看看燈泡會不會亮！
+        </p>
+
+        <!-- SVG 電路圖區域 -->
+        <div id="circuit-container" class="flex justify-center items-center h-[550px] w-full p-4 bg-gray-100 rounded-2xl border-4 border-dashed border-gray-300 relative overflow-hidden">
+            <!-- 背景裝飾 -->
+            <div class="absolute inset-0 z-0 opacity-20">
+                <svg width="100%" height="100%">
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 L 0 40" fill="none" stroke="lightgray" stroke-width="1"/>
+                    </pattern>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                </svg>
+            </div>
+
+            <svg id="circuit-svg" viewBox="0 0 800 500" class="w-full h-full z-10">
+                
+                <!-- 測試區的視覺標記 (虛線方框) -->
+                <rect x="450" y="300" width="100" height="100" fill="none" stroke="#60A5FA" stroke-dasharray="5 5" stroke-width="3" rx="10" ry="10"/>
+                <text x="500" y="315" text-anchor="middle" font-size="16" fill="#60A5FA">測試區</text>
+                
+                <!-- 1. 電路基礎路徑 (分為兩段，中間有缺口) -->
+                <path id="base-circuit-path-1" 
+                      d="M 100 250 H 300 V 150 H 700 V 350 H 550" 
+                      fill="none" 
+                      class="circuit-wire"/>
+                <path id="base-circuit-path-2" 
+                      d="M 450 350 H 100 Z" 
+                      fill="none" 
+                      class="circuit-wire"/>
+                
+                <!-- 2. 動態電流路徑 (分為三段：Switch前、Switch到Gap前、Gap到Battery) -->
+                <path id="current-path-main-1" 
+                      d="M 100 250 H 300 V 150 H 700 V 350 H 550" 
+                      fill="none" 
+                      class="current-wire hidden"/>
+                <path id="current-path-main-2" 
+                      d="M 450 350 H 100 Z" 
+                      fill="none" 
+                      class="current-wire hidden"/>
+
+                <!-- 3. 測試區電路閉合路徑 (當導電體放置時連接 X=550 到 X=450) -->
+                <line id="test-gap-connector" x1="550" y1="350" x2="450" y2="350" stroke="#3B82F6" stroke-width="10" stroke-linecap="round" class="hidden"/>
+                
+                <!-- 測試區連接點 -->
+                <circle cx="550" cy="350" r="8" class="test-point"/>
+                <circle cx="450" cy="350" r="8" class="test-point"/>
+                
+                <!-- ============== 裝置元件 (與上版相同) ============== -->
+                
+                <!-- 電池 -->
+                <g id="battery" transform="translate(150, 220)">
+                    <rect x="0" y="0" width="80" height="60" rx="10" ry="10" class="battery-body" />
+                    <rect x="80" y="10" width="15" height="40" rx="5" ry="5" class="battery-cap-positive"/>
+                    <text x="88" y="38" class="text-3xl font-bold fill-white pointer-events-none">+</text>
+                    <rect x="-15" y="10" width="15" height="40" rx="5" ry="5" class="battery-cap-negative"/>
+                    <text x="-10" y="38" class="text-3xl font-bold fill-white pointer-events-none">-</text>
+                    <text x="35" y="85" class="text-xl font-bold fill-gray-800 text-center pointer-events-none">電池</text>
+                </g>
+                
+                <!-- 燈泡 -->
+                <g id="light-bulb" transform="translate(630, 120)" class="bulb-off-cartoon">
+                    <circle cx="40" cy="40" r="35" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="4"/>
+                    <path d="M 25 25 L 55 55 M 25 55 L 55 25" stroke="#6B7280" stroke-width="4" stroke-linecap="round"/>
+                    <rect x="30" y="70" width="20" height="15" fill="#9CA3AF" rx="5"/>
+                    <text x="25" y="110" class="text-xl font-bold fill-gray-800 text-center pointer-events-none">燈泡</text>
+                </g>
+                
+                <!-- 開關 -->
+                <g id="switch" transform="translate(400, 150)">
+                    <circle cx="0" cy="0" r="12" fill="#FBBF24" stroke="#D97706" stroke-width="3"/>
+                    <circle cx="100" cy="0" r="12" fill="#FBBF24" stroke="#D97706" stroke-width="3"/>
+                    
+                    <line id="switch-arm-open" x1="0" y1="0" x2="60" y2="-60" stroke="#EF4444" stroke-width="8" stroke-linecap="round" class="switch-button-cartoon"/>
+                    
+                    <line id="switch-arm-closed" x1="0" y1="0" x2="100" y2="0" stroke="#10B981" stroke-width="8" stroke-linecap="round" class="switch-button-cartoon hidden"/>
+
+                    <text x="35" y="70" class="text-xl font-bold fill-gray-800 text-center pointer-events-none">開關</text>
+                </g>
+                
+                <!-- 4. 測試元件 (放置在畫布外，等候拖曳) -->
+                <!-- 導電體：金屬螺絲/鑰匙 (Conductor) -->
+                <g id="conductor-item" transform="translate(50, 400)" data-type="conductor" class="draggable-item">
+                    <rect x="0" y="0" width="100" height="40" fill="#9CA3AF" rx="5" ry="5"/>
+                    <rect x="5" y="5" width="90" height="30" fill="#E5E7EB" rx="3" ry="3"/>
+                    <circle cx="50" cy="20" r="5" fill="#4B5563"/>
+                    <text x="50" y="70" text-anchor="middle" class="text-xl font-bold fill-gray-800 pointer-events-none">導電體 (金屬)</text>
+                </g>
+
+                <!-- 絕緣體：木棍/橡膠 (Insulator) -->
+                <g id="insulator-item" transform="translate(200, 400)" data-type="insulator" class="draggable-item">
+                    <rect x="0" y="0" width="100" height="40" fill="#964B00" rx="5" ry="5"/>
+                    <rect x="5" y="5" width="90" height="30" fill="#A0522D" rx="3" ry="3"/>
+                    <text x="50" y="70" text-anchor="middle" class="text-xl font-bold fill-gray-800 pointer-events-none">絕緣體 (木材)</text>
+                </g>
+
+            </svg>
+        </div>
+
+        <div class="mt-8 text-center bg-blue-100 p-4 rounded-xl shadow-inner border-2 border-blue-200">
+            <p id="status-message" class="text-2xl font-bold text-red-600 animate-pulse">
+                電路狀態：斷開 (請先拖曳元件並閉合開關)
+            </p>
+            <p class="text-gray-600 mt-2">
+                **目標：** 觀察當電路中放入不同材料時，電流是否能通過。
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素
+        const switchArmOpen = document.getElementById('switch-arm-open');
+        const switchArmClosed = document.getElementById('switch-arm-closed');
+        const lightBulb = document.getElementById('light-bulb');
+        const statusMessage = document.getElementById('status-message');
+        const currentPath1 = document.getElementById('current-path-main-1');
+        const currentPath2 = document.getElementById('current-path-main-2');
+        const testGapConnector = document.getElementById('test-gap-connector');
+        
+        // 拖曳元件
+        const conductorItem = document.getElementById('conductor-item');
+        const insulatorItem = document.getElementById('insulator-item');
+        const svg = document.getElementById('circuit-svg');
+
+        // 電路邏輯狀態
+        let isSwitchClosed = false;
+        let itemInGap = null; // 'conductor', 'insulator', or null
+        
+        // 拖曳狀態
+        let isDragging = false;
+        let activeDragElement = null;
+        let offset = { x: 0, y: 0 };
+        // 測試區目標中心點：X=500, Y=350 (元件寬度 100, 高度 40)
+        const gapTarget = { x: 500, y: 350, width: 100, height: 100 }; 
+        const gapTolerance = 50; 
+
+        // ------------------ 輔助函數 ------------------
+
+        /**
+         * 提取事件的客戶端座標，兼容滑鼠和觸控
+         * @param {Event} e
+         * @returns {{clientX: number, clientY: number}}
+         */
+        function getEventClientCoords(e) {
+            // 使用 touch 事件的第一個觸控點，如果沒有則使用 mouse 事件
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { clientX, clientY };
+        }
+
+
+        /**
+         * 將螢幕座標轉換為 SVG 座標
+         * @param {number} clientX
+         * @param {number} clientY
+         * @returns {{x: number, y: number}}
+         */
+        function getSvgCoords(clientX, clientY) {
+            const CTM = svg.getScreenCTM();
+            // 使用 CTM 矩陣將螢幕座標轉換為 SVG 空間座標
+            return {
+                x: (clientX - CTM.e) / CTM.a,
+                y: (clientY - CTM.f) / CTM.d
+            };
+        }
+
+        // ------------------ 電路邏輯 ------------------
+
+        /**
+         * 檢查所有條件是否滿足電路閉合
+         */
+        function checkCircuitClosure() {
+            // 閉合條件：開關閉合 AND (有導電體在缺口中)
+            return isSwitchClosed && itemInGap === 'conductor';
+        }
+
+        /**
+         * 處理開關點擊事件
+         */
+        function toggleSwitch() {
+            isSwitchClosed = !isSwitchClosed;
+            updateCircuitUI();
+        }
+
+        /**
+         * 根據電路狀態更新所有視覺元件
+         */
+        function updateCircuitUI() {
+            const isCircuitClosed = checkCircuitClosure();
+
+            // 1. 開關視覺
+            if (isSwitchClosed) {
+                switchArmOpen.classList.add('hidden');
+                switchArmClosed.classList.remove('hidden');
+            } else {
+                switchArmOpen.classList.remove('hidden');
+                switchArmClosed.classList.add('hidden');
+            }
+
+            // 2. 燈泡、電流和狀態訊息
+            if (isCircuitClosed) {
+                // ON 狀態
+                lightBulb.classList.remove('bulb-off-cartoon');
+                lightBulb.classList.add('bulb-on-cartoon');
+
+                currentPath1.classList.remove('hidden');
+                currentPath2.classList.remove('hidden');
+                testGapConnector.classList.remove('hidden');
+
+                currentPath1.classList.add('electric-flow');
+                currentPath2.classList.add('electric-flow');
+
+                statusMessage.textContent = '電路狀態：閉合！燈泡亮起來啦！✨';
+                statusMessage.classList.remove('text-red-600', 'animate-pulse');
+                statusMessage.classList.add('text-green-600', 'animate-bounce-slow');
+
+            } else {
+                // OFF 狀態
+                lightBulb.classList.remove('bulb-on-cartoon');
+                lightBulb.classList.add('bulb-off-cartoon');
+
+                currentPath1.classList.add('hidden');
+                currentPath2.classList.add('hidden');
+                testGapConnector.classList.add('hidden');
+
+                currentPath1.classList.remove('electric-flow');
+                currentPath2.classList.remove('electric-flow');
+
+                let statusText = '電路狀態：斷開 (燈泡暗暗的...)';
+                if (isSwitchClosed && itemInGap === 'insulator') {
+                    statusText = '電路狀態：斷開！絕緣體無法導電！❌';
+                } else if (isSwitchClosed && itemInGap === null) {
+                    statusText = '電路狀態：斷開！缺口需要被填補！';
+                } else if (!isSwitchClosed) {
+                    statusText = '電路狀態：斷開 (請先拖曳元件並閉合開關)';
+                }
+
+                statusMessage.textContent = statusText;
+                statusMessage.classList.add('text-red-600', 'animate-pulse');
+                statusMessage.classList.remove('text-green-600', 'animate-bounce-slow');
+            }
+        }
+        
+        // ------------------ 拖曳邏輯 (Drag and Drop) ------------------
+
+        /**
+         * 處理拖曳開始 (滑鼠/觸控)
+         */
+        function handleDragStart(e) {
+            // 阻止預設行為：只對觸控事件阻止，防止頁面滾動。滑鼠事件的阻止留給 handleDragMove 處理，以確保拖曳啟動順暢
+            if (e.type === 'touchstart') {
+                e.preventDefault(); 
+            }
+            
+            // 找到被點擊的 draggable-item G 元素
+            const targetElement = e.target.closest('.draggable-item');
+            
+            if (targetElement) {
+                activeDragElement = targetElement;
+                isDragging = true;
+                activeDragElement.classList.add('dragging');
+                
+                // 將拖曳中的元素移到最上層
+                svg.appendChild(activeDragElement);
+
+                // 獲取當前 transform
+                const transform = activeDragElement.transform.baseVal.getItem(0);
+                const currentX = transform.matrix.e;
+                const currentY = transform.matrix.f;
+                
+                // 計算偏移量
+                const { clientX, clientY } = getEventClientCoords(e);
+                const { x: mouseX, y: mouseY } = getSvgCoords(clientX, clientY);
+                
+                offset = {
+                    x: mouseX - currentX,
+                    y: mouseY - currentY
+                };
+
+                // 清除之前的 itemInGap 狀態 (如果這個元素原本在 Gap 內)
+                const elementType = activeDragElement.getAttribute('data-type');
+                if (itemInGap === elementType) {
+                    itemInGap = null;
+                }
+                
+                updateCircuitUI();
+            }
+        }
+
+        /**
+         * 處理拖曳移動 (滑鼠/觸控)
+         */
+        function handleDragMove(e) {
+            if (!isDragging || !activeDragElement) return;
+
+            e.preventDefault(); // 阻止滑鼠選取文字或觸控滾動
+            const { clientX, clientY } = getEventClientCoords(e);
+            const { x: mouseX, y: mouseY } = getSvgCoords(clientX, clientY);
+
+            // 更新元素位置
+            const newX = mouseX - offset.x;
+            const newY = mouseY - offset.y;
+
+            // 應用新的 transform
+            activeDragElement.setAttribute('transform', `translate(${newX}, ${newY})`);
+        }
+
+        /**
+         * 處理拖曳結束 (滑鼠/觸控)
+         */
+        function handleDragEnd(e) {
+            if (!isDragging || !activeDragElement) return;
+
+            isDragging = false;
+            activeDragElement.classList.remove('dragging');
+
+            const transform = activeDragElement.transform.baseVal.getItem(0);
+            const currentX = transform.matrix.e;
+            const currentY = transform.matrix.f;
+            
+            // 定義元件的初始位置
+            const originalPosition = activeDragElement.id === 'conductor-item' ? 
+                                     { x: 50, y: 400 } : 
+                                     { x: 200, y: 400 };
+
+            // 元件的中心點 (寬度 100, 高度 40)
+            const itemCenterX = currentX + 50;
+            const itemCenterY = currentY + 20;
+
+            // 檢查元件中心點是否在測試區的容許範圍內
+            const isNearGap = (
+                itemCenterX > (gapTarget.x - gapTolerance) &&
+                itemCenterX < (gapTarget.x + gapTolerance) &&
+                itemCenterY > (gapTarget.y - gapTolerance) &&
+                itemCenterY < (gapTarget.y + gapTolerance)
+            );
+            
+            if (isNearGap) {
+                // 對齊到測試區中心 (450, 330 是元件左上角座標，使其中心 (500, 350) 對齊 Gap Target)
+                const targetX = gapTarget.x - 50; 
+                const targetY = gapTarget.y - 20; 
+                activeDragElement.setAttribute('transform', `translate(${targetX}, ${targetY})`);
+
+                // 更新 itemInGap 狀態
+                itemInGap = activeDragElement.getAttribute('data-type');
+            } else {
+                // 恢復初始位置
+                activeDragElement.setAttribute('transform', `translate(${originalPosition.x}, ${originalPosition.y})`);
+                itemInGap = null; 
+            }
+            
+            activeDragElement = null; // 清除拖曳中的元素
+            updateCircuitUI();
+        }
+
+
+        function init() {
+            // 綁定開關點擊事件
+            switchArmOpen.addEventListener('click', toggleSwitch);
+            switchArmClosed.addEventListener('click', toggleSwitch);
+
+            // 確保所有可拖曳元素都有初始 transform 屬性，方便 JS 操作
+            conductorItem.transform.baseVal.initialize(svg.createSVGTransformFromMatrix(svg.createSVGMatrix()));
+            insulatorItem.transform.baseVal.initialize(svg.createSVGTransformFromMatrix(svg.createSVGMatrix()));
+
+            // 綁定拖曳事件 (滑鼠)
+            svg.addEventListener('mousedown', handleDragStart);
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+            
+            // 綁定拖曳事件 (觸控)
+            svg.addEventListener('touchstart', handleDragStart);
+            // { passive: false } 阻止瀏覽器預設滾動行為，實現拖曳
+            document.addEventListener('touchmove', handleDragMove, { passive: false }); 
+            document.addEventListener('touchend', handleDragEnd);
+
+            updateCircuitUI();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
